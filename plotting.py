@@ -2,12 +2,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .filters import boxcar_average
+from .filters import boxcar_average, deglitch as _deglitch
 from .io import parse_msa
 
 
 def plot_msa(filepath, ax=None, boxcar_width=10, label="", scale=1, normalize=False,
-             x_offset=0, y_offset=0, show=None, xlim=None, edge=None, title=None):
+             x_offset=0, y_offset=0, show=None, xlim=None, edge=None, title=None,
+             deglitch=False, deglitch_thr=6.0):
     """Plot a raw MSA spectrum and its boxcar-smoothed version.
 
     If ``ax`` is None a new figure is created, labelled and shown, so a single
@@ -15,10 +16,13 @@ def plot_msa(filepath, ax=None, boxcar_width=10, label="", scale=1, normalize=Fa
     spectra; the figure is then only shown if ``show=True`` (call it on the
     last spectrum, or call ``plt.show()`` yourself).
 
-    ``normalize`` maps counts to (counts - min) / max; ``y_offset`` is only
+    ``normalize`` rescales counts to 0–1 via (counts - min) / (max - min); ``y_offset`` is only
     applied when normalizing (as in the original). ``scale`` multiplies the
     counts. ``xlim`` is ``(left, right)``; ``edge`` draws a dashed reference
-    line at that energy (eV). Returns ``(line_raw, line_smooth)``.
+    line at that energy (eV). ``deglitch=True`` replaces cosmic-ray spikes
+    (> ``deglitch_thr`` robust sigma from the local median) before scaling,
+    smoothing and normalizing, so single bad channels don't set the 0–1 range.
+    Returns ``(line_raw, line_smooth)``.
     """
     new_fig = ax is None
     if new_fig:
@@ -26,10 +30,12 @@ def plot_msa(filepath, ax=None, boxcar_width=10, label="", scale=1, normalize=Fa
     if show is None:
         show = new_fig
     energy, counts = parse_msa(filepath)
+    if deglitch:
+        counts, _ = _deglitch(counts, thr=deglitch_thr)
     counts = counts * scale
 
     if normalize:
-        counts = (counts - min(counts)) / max(counts)
+        counts = (counts - counts.min()) / (counts.max() - counts.min())
         counts = counts + y_offset
 
     energy = energy + x_offset
